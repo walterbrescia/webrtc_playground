@@ -5,6 +5,7 @@ import ssl
 import json
 import threading
 import asyncio
+import copy
 
 """
     -------------------------------------------------------------------------------------------------------
@@ -41,10 +42,13 @@ peers = {}
 @sio.event
 def connect(sid, environ):
     global peers
-    print("connected ", sid)
-    for peer in peers:
-        if peer["REMOTE_ADDR"] == environ['REMOTE_ADDR'] and peer["REMOTE_PORT"] == environ['REMOTE_PORT']:
-            peers.pop(peer)
+    print("New connection ", sid)
+    # If the peer is already in the list, remove it.
+    # This allows to update the peer's status and info.
+    # peers_ = copy.deepcopy(peers)
+    # for peer in peers_:
+    #     if peers_[peer]["REMOTE_ADDR"] == environ["REMOTE_ADDR"] and peers_[peer]["REMOTE_PORT"] == environ["REMOTE_PORT"]:
+    #         peers.pop(peer)
     peers[sid] = {
         "REMOTE_ADDR": environ['REMOTE_ADDR'], 
         "REMOTE_PORT": environ['REMOTE_PORT'], 
@@ -62,11 +66,9 @@ async def available(sid, data):
     global peers
     """Serve the client-side application."""
     print("received ", sid, data)
-    peers[sid] = {
-        "STATUS": ALIVE,
-        "CHECKS_TO_LIVE": CHECKS_TO_LIVE,
-        "ID": data["ID"]
-    }
+    peers[sid]["STATUS"] = ALIVE
+    peers[sid]["CHECKS_TO_LIVE"] = CHECKS_TO_LIVE
+    peers[sid]["ID"] = data["ID"]
 
 async def drop_sid(sid):
     global peers
@@ -88,17 +90,22 @@ async def check_peers():
     for sid in dead_sids:
         print("Disconnecting dead sid: ", sid)
         drop_sid(sid)
+    
+    print("Peers: ")
+    for peer in peers:
+        print("    * ", peer, peers[peer])
     # await broadcast_peers()
     # threading.Timer(CHECK_RATE, check_peers).start()
     # await asyncio.sleep(CHECK_RATE)
     # await check_peers()
 
-async def broadcast_peers():
+@sio.event
+async def get_peers(sid):
     global peers
-    print("Broadcasting peers...")
-    for sid in peers:
-        print("\tto ", sid)
-        await sio.emit('peers', peers, room=sid)
+    print(sid, " requested available peers.")
+    peers_ = copy.deepcopy(peers)
+    # peers_.pop(sid)
+    await sio.emit('reply_peers', peers_, room=sid)
 
 async def main():
     global web
@@ -114,6 +121,7 @@ if __name__ == '__main__':
     ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
     ssl_context.load_cert_chain('keys/cert.pem', 'keys/key.pem')
     # app.router.add_post('/available', available)
+    # app.router.add_post('/get_peers', get_peers)
     try:
         loop.run_until_complete(main())
         web.run_app(app, port=443, ssl_context=ssl_context, loop=loop)

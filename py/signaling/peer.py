@@ -44,18 +44,6 @@ async def disconnect():
     print('disconnected from server')
     STATUS = DISCONNECTED
 
-@sio.event
-async def peers(data):
-    print('peers:', data)
-
-async def main():
-    # timer = Timer(ALIVE_TIMER, alive_cb)
-    alive_timer = AsyncIOTimer(ALIVE_TIMER, alive_cb)
-    alive_timer.start()
-    # asyncio.ensure_future(alive_cb())
-    await sio.connect('https://0.0.0.0:443/')
-    await sio.wait()
-
 async def alive():
     global STATUS
     print("STATUS: ", STATUS)
@@ -72,6 +60,24 @@ async def alive_cb():
             # time.sleep(ALIVE_TIMER)
     # await alive_cb()
 
+async def get_peers():
+    await sio.emit('get_peers')
+
+@sio.event
+async def reply_peers(data):
+    print('Peers:')
+    for peer in data:
+        print("    * ", peer, data[peer])
+
+async def main():
+    # timer = Timer(ALIVE_TIMER, alive_cb)
+    alive_timer = AsyncIOTimer(ALIVE_TIMER, alive_cb)
+    alive_timer.start()
+    peers_timer = AsyncIOTimer(ALIVE_TIMER, get_peers)
+    peers_timer.start()
+    # asyncio.ensure_future(alive_cb())
+    await sio.connect('https://0.0.0.0:443')
+    await sio.wait()
 
 if __name__ == '__main__':
     try:
